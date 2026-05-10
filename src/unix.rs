@@ -90,6 +90,17 @@ impl MmapInner {
         file: RawFd,
         offset: u64,
     ) -> io::Result<MmapInner> {
+        Self::new_with_hint(len, prot, flags, file, offset, None)
+    }
+
+    fn new_with_hint(
+        len: usize,
+        prot: libc::c_int,
+        flags: libc::c_int,
+        file: RawFd,
+        offset: u64,
+        hint: Option<*mut libc::c_void>,
+    ) -> io::Result<MmapInner> {
         let alignment = offset % page_size() as u64;
         let aligned_offset = offset - alignment;
 
@@ -97,7 +108,7 @@ impl MmapInner {
 
         unsafe {
             let ptr = mmap(
-                ptr::null_mut(),
+                hint.unwrap_or(ptr::null_mut()),
                 map_len as libc::size_t,
                 prot,
                 flags,
@@ -332,6 +343,17 @@ impl MmapInner {
         huge: Option<u8>,
         no_reserve: bool,
     ) -> io::Result<MmapInner> {
+        Self::map_anon_with_hint(len, stack, populate, huge, no_reserve, None)
+    }
+
+    pub fn map_anon_with_hint(
+        len: usize,
+        stack: bool,
+        populate: bool,
+        huge: Option<u8>,
+        no_reserve: bool,
+        hint: Option<*mut libc::c_void>,
+    ) -> io::Result<MmapInner> {
         let stack = if stack { MAP_STACK } else { 0 };
         let populate = if populate { MAP_POPULATE } else { 0 };
         let hugetlb = if huge.is_some() { MAP_HUGETLB } else { 0 };
@@ -339,7 +361,7 @@ impl MmapInner {
             (u64::from(mask) & (MAP_HUGE_MASK as u64)) << MAP_HUGE_SHIFT
         }) as i32;
         let no_reserve = if no_reserve { MAP_NORESERVE } else { 0 };
-        MmapInner::new(
+        MmapInner::new_with_hint(
             len,
             libc::PROT_READ | libc::PROT_WRITE,
             libc::MAP_PRIVATE
@@ -351,8 +373,10 @@ impl MmapInner {
                 | no_reserve,
             -1,
             0,
+            hint,
         )
     }
+
 
     pub fn flush(&self, offset: usize, len: usize) -> io::Result<()> {
         let alignment = (self.ptr as usize + offset) % page_size();

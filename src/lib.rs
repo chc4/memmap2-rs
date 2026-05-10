@@ -159,6 +159,7 @@ pub struct MmapOptions {
     stack: bool,
     populate: bool,
     no_reserve_swap: bool,
+    hint: Option<*mut libc::c_void>,
 }
 
 impl MmapOptions {
@@ -213,6 +214,13 @@ impl MmapOptions {
     /// ```
     pub fn offset(&mut self, offset: u64) -> &mut Self {
         self.offset = offset;
+        self
+    }
+
+    /// Configures the memory map to hint to the operating system that it should be
+    /// allocated at address `hint`. This is only treated as a suggestion.
+    pub fn hint(&mut self, hint: *mut libc::c_void) -> &mut Self {
+        self.hint = Some(hint);
         self
     }
 
@@ -620,12 +628,13 @@ impl MmapOptions {
         // See get_len() for details.
         let len = Self::validate_len(len as u64)?;
 
-        MmapInner::map_anon(
+        MmapInner::map_anon_with_hint(
             len,
             self.stack,
             self.populate,
             self.huge,
             self.no_reserve_swap,
+            self.hint,
         )
         .map(|inner| MmapMut { inner })
     }
